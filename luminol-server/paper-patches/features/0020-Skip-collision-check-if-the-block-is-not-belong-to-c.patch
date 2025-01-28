@@ -1,14 +1,15 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: MrHua269 <wangxyper@163.com>
 Date: Sun, 12 Jan 2025 11:02:07 +0800
-Subject: [PATCH] Set old pos before moving entity by piston
+Subject: [PATCH] Skip collision check if the block is not belong to current
+ tick region
 
 
-diff --git a/src/main/java/me/earthme/luminol/config/modules/fixes/FoliaPistonIssueFixConfig.java b/src/main/java/me/earthme/luminol/config/modules/fixes/FoliaPistonIssueFixConfig.java
+diff --git a/src/main/java/me/earthme/luminol/config/modules/fixes/FoliaOldPositionIssueFixConfig.java b/src/main/java/me/earthme/luminol/config/modules/fixes/FoliaOldPositionIssueFixConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..6edfb1d36a88d319151d28ba14873269736f84b6
+index 0000000000000000000000000000000000000000..7294792d934e7374dcf335135dda739702fdcc62
 --- /dev/null
-+++ b/src/main/java/me/earthme/luminol/config/modules/fixes/FoliaPistonIssueFixConfig.java
++++ b/src/main/java/me/earthme/luminol/config/modules/fixes/FoliaOldPositionIssueFixConfig.java
 @@ -0,0 +1,20 @@
 +package me.earthme.luminol.config.modules.fixes;
 +
@@ -16,7 +17,7 @@ index 0000000000000000000000000000000000000000..6edfb1d36a88d319151d28ba14873269
 +import me.earthme.luminol.config.EnumConfigCategory;
 +import me.earthme.luminol.config.IConfigModule;
 +
-+public class FoliaPistonIssueFixConfig implements IConfigModule {
++public class FoliaOldPositionIssueFixConfig implements IConfigModule {
 +    @ConfigInfo(baseName = "enabled")
 +    public static boolean enabled = false;
 +
@@ -27,6 +28,6 @@ index 0000000000000000000000000000000000000000..6edfb1d36a88d319151d28ba14873269
 +
 +    @Override
 +    public String getBaseName() {
-+        return "folia.fix_piston_moving_issue";
++        return "folia.fix_old_position_issue";
 +    }
 +}

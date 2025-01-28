@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MrHua269 <wangxyper@163.com>
+Date: Sun, 12 Jan 2025 11:02:06 +0800
+Subject: [PATCH] Skip collision check if the block is not belong to current
+ tick region
+
+
+diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
+index c87db2d497ca9ed2e8aad5f1bc52555ff0952b80..759db5813cc83daa6f0e397483fdb8bd90950a72 100644
+--- a/net/minecraft/world/entity/Entity.java
++++ b/net/minecraft/world/entity/Entity.java
+@@ -1675,6 +1675,10 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+                         return;
+                     }
+ 
++                    if(!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(this.level, blockPos) && me.earthme.luminol.config.modules.fixes.FoliaOldPositionIssueFixConfig.enabled) {
++                        continue;
++                    }
++
+                     BlockState blockState = this.level().getBlockState(blockPos);
+                     if (!blockState.isAir() && set.add(blockPos.asLong())) {
+                         try {
+diff --git a/net/minecraft/world/level/block/piston/PistonMovingBlockEntity.java b/net/minecraft/world/level/block/piston/PistonMovingBlockEntity.java
+index 3df23feff6937b6a2dbeff82e489a9a4ff644843..ab33af9ea9e7729abb7cc0073c468c2f8ecbcbb9 100644
+--- a/net/minecraft/world/level/block/piston/PistonMovingBlockEntity.java
++++ b/net/minecraft/world/level/block/piston/PistonMovingBlockEntity.java
+@@ -2,6 +2,8 @@ package net.minecraft.world.level.block.piston;
+ 
+ import java.util.Iterator;
+ import java.util.List;
++
++import me.earthme.luminol.config.modules.fixes.FoliaOldPositionIssueFixConfig;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
+ import net.minecraft.core.HolderGetter;
