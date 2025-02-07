@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MrHua269 <wangxyper@163.com>
+Date: Fri, 7 Feb 2025 22:25:08 +0800
+Subject: [PATCH] Do not store tick count for living entities
+
+
+diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
+index 61814607a6c8e4ce8d07645f005ea8d53f624c95..d6af2839f6ad51f2a29a4e4a141778a2e93145d5 100644
+--- a/net/minecraft/world/entity/Entity.java
++++ b/net/minecraft/world/entity/Entity.java
+@@ -2661,10 +2661,10 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+             }
+             // CraftBukkit start
+             // Spigot start
+-            if (this instanceof net.minecraft.world.entity.LivingEntity) {
++            /*if (this instanceof net.minecraft.world.entity.LivingEntity) { // Luminol - Do not store tick count for living entities
+                 this.tickCount = compound.getInt("Spigot.ticksLived");
+-            }
+-            // Spigot end
++            }*/
++            // Spigot end // Luminol - Do not store tick count for living entities
+             this.persist = !compound.contains("Bukkit.persist") || compound.getBoolean("Bukkit.persist");
+             this.visibleByDefault = !compound.contains("Bukkit.visibleByDefault") || compound.getBoolean("Bukkit.visibleByDefault");
+             // SPIGOT-6907: re-implement LivingEntity#setMaximumAir()
