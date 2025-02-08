@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MrHua269 <wangxyper@163.com>
+Date: Sat, 8 Feb 2025 15:02:31 +0800
+Subject: [PATCH] Fix nether portal zero delta movement issue
+
+
+diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
+index d6d429817dac95badcb1d67e370cd37cef43fd48..243129274e532ec732fae9c61bb1a2cc18c146c7 100644
+--- a/net/minecraft/world/entity/Entity.java
++++ b/net/minecraft/world/entity/Entity.java
+@@ -4305,7 +4305,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+                             // done
+                             portalInfoCompletable.complete(
+                                 new net.minecraft.world.level.portal.TeleportTransition(
+-                                    destination, Vec3.atBottomCenterOf(adjustedSpawn), Vec3.ZERO, 90.0f, 0.0f,
++                                    destination, Vec3.atBottomCenterOf(adjustedSpawn), this.getDeltaMovement(), 90.0f, 0.0f, // Luminol - Fix portal zero delta movement issue
+                                     TeleportTransition.PLAY_PORTAL_SOUND.then(TeleportTransition.PLACE_PORTAL_TICKET),
+                                     org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.END_PORTAL
+                                 )
