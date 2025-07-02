@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MrHua269 <mrhua269@gmail.com>
+Date: Wed, 2 Jul 2025 22:39:21 +0800
+Subject: [PATCH] Fix incorrect configuration mode checks
+
+A simple fix of: https://github.com/PaperMC/Folia/issues/378
+
+diff --git a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
+index 28c4a7bcb73946d37ed57c6f76d27ba019554c98..9030d46f03ca93826e3e8b140443b33df4567687 100644
+--- a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
+@@ -94,6 +94,14 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+         }
+         // Folia start - region threading
+         if (!(this instanceof ServerGamePacketListenerImpl gamePacketListener)) {
++            // Luminol start - Fix incorrect configuration mode checks
++            if (io.papermc.paper.threadedregions.RegionizedServer.isGlobalTickThread()) {
++                // we are not starting to turn into a game packet handler, so we can safely return
++                if (this instanceof ServerConfigurationPacketListenerImpl && !io.papermc.paper.threadedregions.RegionizedServer.isNotOwnedByGlobalRegion(this.connection)) {
++                    return;
++                }
++            }
++            // Luminol end
+             throw new UnsupportedOperationException("Configuration mode is not supported in its current state");
+         }
+         gamePacketListener.player.getBukkitEntity().taskScheduler.retire();
