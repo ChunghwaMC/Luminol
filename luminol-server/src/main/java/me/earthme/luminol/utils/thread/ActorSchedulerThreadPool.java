@@ -677,8 +677,10 @@ public class ActorSchedulerThreadPool {
                     SchedulerWorkerThreadCarrier other = this.randomSelect();
                     final int maxStealAttempts = ActorSchedulerThreadPool.this.workers.size();
 
-                    for (int i = 0; i < maxStealAttempts && !(other != null && other != this); i++) {
+                    int attempts = 0;
+                    for (int i = 0; i < maxStealAttempts && other != null && other == this && attempts < maxStealAttempts; i++) {
                         other = this.randomSelect();
+                        attempts++;
                     }
 
                     if (other != null && other != this) {
@@ -690,6 +692,7 @@ public class ActorSchedulerThreadPool {
                         incomingMessage.setWorker(this);
 
                         this.inComingTaskMessages.add(incomingMessage);
+                        this.status.set(STATUS_BUSY);
                         continue;
                     }
                 }
@@ -699,7 +702,7 @@ public class ActorSchedulerThreadPool {
                 executeFailureCount++;
 
                 // sleep 1 - 100us
-                LockSupport.parkNanos("IDLE", Math.max(Math.max(executeFailureCount, 1), 100) * 1000L);
+                LockSupport.parkNanos("IDLE", Math.min(Math.max(executeFailureCount * 1000L, 1000L), 100000L));
             }
 
             this.status.set(STATUS_SHUTDOWN);
