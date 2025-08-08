@@ -151,6 +151,24 @@ public class ActorSchedulerThreadPool {
             }
         }
 
+        // Check for workers with lowest load (fewest tasks)
+        SchedulerWorkerThreadCarrier bestWorker = null;
+        int minTaskCount = Integer.MAX_VALUE;
+        
+        for (SchedulerWorkerThreadCarrier w : workers) {
+            if (w.status.get() != SchedulerWorkerThreadCarrier.STATUS_SHUTDOWN) {
+                int taskCount = w.inComingTaskMessages.size();
+                if (taskCount < minTaskCount) {
+                    minTaskCount = taskCount;
+                    bestWorker = w;
+                }
+            }
+        }
+        
+        if (bestWorker != null) {
+            return bestWorker;
+        }
+
         // idle first failed, chose one randomly
         int r = ThreadLocalRandom.current().nextInt(workers.size());
         for (int i = 0; i < workers.size(); i++) {
@@ -701,8 +719,15 @@ public class ActorSchedulerThreadPool {
 
                 executeFailureCount++;
 
-                // sleep 1 - 100us
-                LockSupport.parkNanos("IDLE", Math.min(Math.max(executeFailureCount * 1000L, 1000L), 100000L));
+                // sleep 1 - 100us based on load
+                long parkNanos = Math.min(Math.max(executeFailureCount * 1000L, 1000L), 100000L);
+                
+                // If this worker has executed tasks before, reduce sleep time to be more responsive
+                if (this.validTaskExecutedCnt.get() > 0) {
+                    parkNanos = Math.min(parkNanos, 10000L); // Max 10us sleep if we've done work
+                }
+                
+                LockSupport.parkNanos("IDLE", parkNanos);
             }
 
             this.status.set(STATUS_SHUTDOWN);
