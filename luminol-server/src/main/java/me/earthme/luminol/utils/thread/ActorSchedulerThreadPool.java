@@ -28,11 +28,12 @@ public class ActorSchedulerThreadPool {
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
 
     // TODO Balance them
-    private final long minTaskDeadlineOffset = 1_000_000L; // 1ms
-    private final long minTickTimeBuffer = 1000_000L; // 1ms
-
-    private final long maxTaskDeadlineOffset = 5_000_000L; // 5ms
-    private final long maxTickTimeBuffer = 5000_000L; // 5ms
+    private final SchedulerConfig schedulerConfig = new SchedulerConfig(
+            TimeUnit.MILLISECONDS.toNanos(2),
+            TimeUnit.MILLISECONDS.toNanos(4),
+            TimeUnit.MILLISECONDS.toNanos(4),
+            TimeUnit.MILLISECONDS.toNanos(6)
+    );
 
     public ActorSchedulerThreadPool(int nThreads, ThreadFactory threadFactory, Thread.UncaughtExceptionHandler exceptionHandler) {
         this.threadFactory = threadFactory;
@@ -64,8 +65,9 @@ public class ActorSchedulerThreadPool {
         for (WorkerMessageNode node : this.taskBandings.values()) {
             this.modifyValueOfTask(
                     node,
-                    this.minTickTimeBuffer,
-                    this.maxTaskDeadlineOffset,
+                    this.schedulerConfig.minTickTimeWaitBuffer,
+                    this.schedulerConfig.maxTickTimeWaitBuffer,
+                    true,
                     true,
                     true
             );
@@ -118,16 +120,17 @@ public class ActorSchedulerThreadPool {
             long tickDeadlineOffset,
             long mainThreadTaskPeriod,
             boolean interruptMainThreadTask,
-            boolean pushTickWithinMinTickDeadlineBuffer
+            boolean pushTickWithinMinTickDeadlineBuffer,
+            boolean signal
     ) {
         final Consumer<WorkerMessageNode> action = node -> {
             target.tickTimeDeadlineBuffer = tickDeadlineOffset;
-            target.tickTimeDeadlineBuffer = Math.max(this.minTickTimeBuffer, target.tickTimeDeadlineBuffer);
-            target.tickTimeDeadlineBuffer = Math.min(this.maxTickTimeBuffer, target.tickTimeDeadlineBuffer);
+            target.tickTimeDeadlineBuffer = Math.max(this.schedulerConfig.minTickTimeWaitBuffer, target.tickTimeDeadlineBuffer);
+            target.tickTimeDeadlineBuffer = Math.min(this.schedulerConfig.maxTickTimeWaitBuffer, target.tickTimeDeadlineBuffer);
 
             target.mainThreadTaskPeriod = mainThreadTaskPeriod;
-            target.mainThreadTaskPeriod = Math.max(this.minTaskDeadlineOffset, target.mainThreadTaskPeriod);
-            target.mainThreadTaskPeriod = Math.min(this.maxTaskDeadlineOffset, target.mainThreadTaskPeriod);
+            target.mainThreadTaskPeriod = Math.max(this.schedulerConfig.minTaskDeadlineBuffer, target.mainThreadTaskPeriod);
+            target.mainThreadTaskPeriod = Math.min(this.schedulerConfig.maxTaskDeadlineBuffer, target.mainThreadTaskPeriod);
 
             // we only do this when we are processed inside a large message block(WorkerMessageNode)
             if (node != null) {
@@ -139,7 +142,9 @@ public class ActorSchedulerThreadPool {
         final SubMessageNode wrappedAction = new SubMessageNode(action, target, () -> action.accept(null));
 
         if (target.sendMessage(wrappedAction)) {
-            target.notifyReceiver();
+            if (signal) {
+                target.notifyReceiver();
+            }
         }
     }
 
@@ -181,7 +186,7 @@ public class ActorSchedulerThreadPool {
         return null;
     }
 
-    private void calculateTimeBuffer(@NotNull WorkerMessageNode target) {
+    private void calculateTimeBuffer(@NotNull WorkerMessageNode target, boolean signal) {
          final long deadlineApproachAvg = Math.max(target.getLastDeadlineApproachAvg(), 0);
          final long tickExecutionAvg = target.getAvgExecutionTime();
 
@@ -193,15 +198,16 @@ public class ActorSchedulerThreadPool {
          final double load = (double) tickExecutionAvg / ((double) deadlineApproachAvg + (double) tickExecutionAvg);
 
         // recalculate time buffer
-        final long currToApproach_tickDeadlineOffset = this.minTickTimeBuffer + (long) load * (this.maxTickTimeBuffer - this.minTickTimeBuffer);
-        final long currToApproach_taskDeadlineSingle = this.minTaskDeadlineOffset + (long) (((this.maxTaskDeadlineOffset - this.minTaskDeadlineOffset)) * (1 - load));
+        final long currToApproach_tickDeadlineOffset = this.schedulerConfig.minTickTimeWaitBuffer + (long) load * (this.schedulerConfig.maxTickTimeWaitBuffer - this.schedulerConfig.minTickTimeWaitBuffer);
+        final long currToApproach_taskDeadlineSingle = this.schedulerConfig.minTaskDeadlineBuffer + (long) (((this.schedulerConfig.maxTaskDeadlineBuffer - this.schedulerConfig.minTaskDeadlineBuffer)) * (1 - load));
 
         this.modifyValueOfTask(
                 target,
                 currToApproach_tickDeadlineOffset,
                 currToApproach_taskDeadlineSingle,
                 false,
-                true // Interrupt tick once (we'll process the tick soon later)
+                true, // Interrupt tick once (we'll process the tick soon later)
+                signal
         );
     }
 
@@ -212,7 +218,6 @@ public class ActorSchedulerThreadPool {
             return;
         }
 
-        this.calculateTimeBuffer(target);
         this.dispatchMessageNodeAuto(target, true);
     }
 
@@ -251,12 +256,16 @@ public class ActorSchedulerThreadPool {
             return;
         }
 
-        this.calculateTimeBuffer(workerMessageNode);
+        this.calculateTimeBuffer(workerMessageNode, false);
         if (!targetWorker.message(workerMessageNode) && !this.shutdown.get()) {
             workerMessageNode.cleanOwnerWorker(); // we need to reset this to prevent task losing from queue
 
             this.dispatchMessageNodeAuto(workerMessageNode, true);
         }
+    }
+
+    private record SchedulerConfig(long minTaskDeadlineBuffer, long maxTaskDeadlineBuffer, long minTickTimeWaitBuffer,
+                                   long maxTickTimeWaitBuffer) {
     }
 
     // copied from concurrentutil
@@ -326,8 +335,8 @@ public class ActorSchedulerThreadPool {
         private final SchedulableTick internal;
         private final MultiThreadedQueue<SubMessageNode> subMessageNodes = new MultiThreadedQueue<>();
 
-        private long tickTimeDeadlineBuffer = ActorSchedulerThreadPool.this.maxTickTimeBuffer;
-        private long mainThreadTaskPeriod = ActorSchedulerThreadPool.this.maxTaskDeadlineOffset;
+        private long tickTimeDeadlineBuffer = ActorSchedulerThreadPool.this.schedulerConfig.maxTickTimeWaitBuffer;
+        private long mainThreadTaskPeriod = ActorSchedulerThreadPool.this.schedulerConfig.maxTaskDeadlineBuffer;
 
         private SchedulerWorkerThreadCarrier ownerWorker;
 
@@ -392,21 +401,24 @@ public class ActorSchedulerThreadPool {
             boolean canceled = false;
 
             try {
+                final AtomicInteger executedCount = new AtomicInteger(0);
+
                 final long tickDeadline = this.internal.getScheduledStart();
                 final long taskDeadline = System.nanoTime() + this.mainThreadTaskPeriod;
-                final AtomicInteger executedCount = new AtomicInteger(0);
+                long remaining = System.nanoTime() - tickDeadline;
 
                 this.lastDeadlineApproachSum.getAndAdd(tickDeadline - System.nanoTime());
                 this.passedTimes.getAndIncrement();
 
-                if (this.internal.hasTasks()) {
+                // run tasks once if buffer(tick + task) is enough for extra task execution, or we will do task run during the wait stage
+                if (this.internal.hasTasks() && (remaining + this.tickTimeDeadlineBuffer) < 0) {
                     canceled = !this.internal.runTasks(() -> {
                         this.processSubMessageNode();
 
-                        final long remaining = System.nanoTime() - taskDeadline;
+                        final long remainingCurr = System.nanoTime() - taskDeadline;
 
                         executedCount.incrementAndGet();
-                        return remaining > 0 && !this.mainThreadTaskInterrupted;
+                        return remainingCurr > 0 && !this.mainThreadTaskInterrupted;
                     });
                 }
 
@@ -416,7 +428,6 @@ public class ActorSchedulerThreadPool {
                     return;
                 }
 
-                long remaining = System.nanoTime() - tickDeadline;
 
                 // we have enough time for this tick, so reinsert back for load balance
                 if ((remaining + this.tickTimeDeadlineBuffer) < 0) {
@@ -424,17 +435,18 @@ public class ActorSchedulerThreadPool {
                 }
 
                 // we pushed tick for more task runs
-                if (this.pushTickWithinMinTickDeadlineBuffer && (remaining + ActorSchedulerThreadPool.this.minTickTimeBuffer) < 0) {
+                if (this.pushTickWithinMinTickDeadlineBuffer && (remaining + ActorSchedulerThreadPool.this.schedulerConfig.minTickTimeWaitBuffer) < 0) {
                     return;
                 }
 
+                int taskExecutionFailure = 0;
                 for (;;) {
                     this.processSubMessageNode();
 
                     remaining = System.nanoTime() - tickDeadline;
 
                     // might someone notified for a task execution within its min time buffer
-                    if (this.pushTickWithinMinTickDeadlineBuffer && (remaining + ActorSchedulerThreadPool.this.minTickTimeBuffer) < 0) {
+                    if (this.pushTickWithinMinTickDeadlineBuffer && (remaining + ActorSchedulerThreadPool.this.schedulerConfig.minTickTimeWaitBuffer) < 0) {
                         return;
                     }
 
@@ -453,11 +465,14 @@ public class ActorSchedulerThreadPool {
                                 break;
                             }
 
+                            taskExecutionFailure = 0;
                             continue;
                         }
 
+                        taskExecutionFailure++;
+
                         Thread.yield();
-                        LockSupport.parkNanos("AWAIT DEADLINE", 1_000L);
+                        LockSupport.parkNanos("AWAIT DEADLINE", Math.min(10, taskExecutionFailure) * 1000L);
                         continue;
                     }
 
