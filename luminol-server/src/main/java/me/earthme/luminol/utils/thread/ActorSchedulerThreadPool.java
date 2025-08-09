@@ -156,7 +156,7 @@ public class ActorSchedulerThreadPool {
             }
         }
 
-        // Check for workers with lowest load (fewest tasks)
+        // Check for workers with the lowest load (fewest tasks)
         SchedulerWorkerThreadCarrier bestWorker = null;
         int minTaskCount = Integer.MAX_VALUE;
         
@@ -710,10 +710,12 @@ public class ActorSchedulerThreadPool {
                     SchedulerWorkerThreadCarrier other = this.randomSelect();
                     final int maxStealAttempts = ActorSchedulerThreadPool.this.workers.size();
 
-                    int attempts = 0;
-                    for (int i = 0; i < maxStealAttempts && other != null && other == this && attempts < maxStealAttempts; i++) {
+                    for (int i = 0; i < maxStealAttempts; i++) {
+                        if (other != null && other != this) {
+                            break;
+                        }
+
                         other = this.randomSelect();
-                        attempts++;
                     }
 
                     if (other != null && other != this) {
