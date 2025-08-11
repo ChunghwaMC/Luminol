@@ -6,6 +6,7 @@ Subject: [PATCH] Use vanilla hopper logic & Leaves: Lithium Sleeping Block
 
 This patch is based on Leaves(https://github.com/LeavesMC/Leaves)
 Original license: GPL3(https://github.com/LeavesMC/Leaves/blob/master/licenses/GPL.md)
+Make CI pre-release
 
 diff --git a/net/minecraft/core/NonNullList.java b/net/minecraft/core/NonNullList.java
 index 7e31c5c8659d24948fd45a2d6ee7bdeca6027d27..387325b971b7cec6aeb677bf6c49b8bf21b3a344 100644
@@ -1402,7 +1403,7 @@ index 363d85c96bd3fb1a1945595df36e30bd6dd2fa4e..5f16810643b7567702b1101234571eaf
 +    // Leaves end - Lithium Sleeping Block Entity
  }
 diff --git a/net/minecraft/world/level/block/entity/HopperBlockEntity.java b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..32acdec857f3f0bfa67b6a14820c10d4a655f381 100644
+index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..cbf6914a479e5131a704080f936f117564d8efb1 100644
 --- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 @@ -27,8 +27,30 @@ import net.minecraft.world.level.block.state.BlockState;
@@ -1994,7 +1995,7 @@ index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..32acdec857f3f0bfa67b6a14820c10d4
 +        LevelChunk.RebindableTickingBlockEntityWrapper tickWrapper = this.lithium$getTickWrapper();
 +        if (tickWrapper != null) {
 +            this.lithium$setSleepingTicker(tickWrapper.ticker);
-+            tickWrapper.rebind(SleepingBlockEntity.SLEEPING_BLOCK_ENTITY_TICKER);
++            tickWrapper.rebind(SleepingBlockEntity.SLEEPING_BLOCK_ENTITY_TICKER.apply(tickWrapper.ticker));
 +
 +            // Set the last tick time to max value, so other hoppers transferring into this hopper will set it to 7gt
 +            // cooldown. Then when waking up, we make sure to not tick this hopper in the same gametick.
