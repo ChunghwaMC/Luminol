@@ -6,8 +6,51 @@ Subject: [PATCH] Use vanilla hopper logic & Leaves: Lithium Sleeping Block
 
 This patch is based on Leaves(https://github.com/LeavesMC/Leaves)
 Original license: GPL3(https://github.com/LeavesMC/Leaves/blob/master/licenses/GPL.md)
-Make CI pre-release
 
+diff --git a/io/papermc/paper/threadedregions/RegionizedWorldData.java b/io/papermc/paper/threadedregions/RegionizedWorldData.java
+index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..f43791e11e54be11b844118ff7c58616e45700f4 100644
+--- a/io/papermc/paper/threadedregions/RegionizedWorldData.java
++++ b/io/papermc/paper/threadedregions/RegionizedWorldData.java
+@@ -241,7 +241,18 @@ public final class RegionizedWorldData {
+ 
+             // tile entity ticking
+             for (final TickingBlockEntity tileEntity : from.pendingBlockEntityTickers) {
+-                final BlockPos pos = tileEntity.getPos();
++                //final BlockPos pos = tileEntity.getPos();
++                // Luminol start - Fix region threading with lithium
++                BlockPos pos = tileEntity.getPos();
++                // I knew this is awful but the jvm is more awful than this
++                // XP
++                if (pos == null) {
++                    var baking = tileEntity.getLithiumSleepingBaked();
++                    if (baking != null) {
++                        pos = baking.getPos();
++                    }
++                }
++                // Luminol end
+                 final int chunkX = pos.getX() >> 4;
+                 final int chunkZ = pos.getZ() >> 4;
+ 
+@@ -252,7 +263,18 @@ public final class RegionizedWorldData {
+                   //       marked as removed. So if there is no section, it's probably removed!
+             }
+             for (final TickingBlockEntity tileEntity : from.blockEntityTickers) {
+-                final BlockPos pos = tileEntity.getPos();
++                //final BlockPos pos = tileEntity.getPos();
++                // Luminol start - Fix region threading with lithium
++                BlockPos pos = tileEntity.getPos();
++                // I knew this is awful but the jvm is more awful than this
++                // XP
++                if (pos == null) {
++                    var baking = tileEntity.getLithiumSleepingBaked();
++                    if (baking != null) {
++                        pos = baking.getPos();
++                    }
++                }
++                // Luminol end
+                 final int chunkX = pos.getX() >> 4;
+                 final int chunkZ = pos.getZ() >> 4;
+ 
 diff --git a/net/minecraft/core/NonNullList.java b/net/minecraft/core/NonNullList.java
 index 7e31c5c8659d24948fd45a2d6ee7bdeca6027d27..387325b971b7cec6aeb677bf6c49b8bf21b3a344 100644
 --- a/net/minecraft/core/NonNullList.java
@@ -1403,7 +1446,7 @@ index 363d85c96bd3fb1a1945595df36e30bd6dd2fa4e..5f16810643b7567702b1101234571eaf
 +    // Leaves end - Lithium Sleeping Block Entity
  }
 diff --git a/net/minecraft/world/level/block/entity/HopperBlockEntity.java b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..cbf6914a479e5131a704080f936f117564d8efb1 100644
+index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..b4ba997d100c4547c48413c165d8cbea52cd1b3c 100644
 --- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 @@ -27,8 +27,30 @@ import net.minecraft.world.level.block.state.BlockState;
@@ -1829,7 +1872,7 @@ index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..cbf6914a479e5131a704080f936f1175
      }
  
      public static void entityInside(Level level, BlockPos pos, BlockState state, Entity entity, HopperBlockEntity blockEntity) {
-@@ -887,4 +953,731 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -887,4 +953,732 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
      protected AbstractContainerMenu createMenu(int id, Inventory player) {
          return new HopperMenu(id, player, this);
      }
@@ -1995,7 +2038,8 @@ index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..cbf6914a479e5131a704080f936f1175
 +        LevelChunk.RebindableTickingBlockEntityWrapper tickWrapper = this.lithium$getTickWrapper();
 +        if (tickWrapper != null) {
 +            this.lithium$setSleepingTicker(tickWrapper.ticker);
-+            tickWrapper.rebind(SleepingBlockEntity.SLEEPING_BLOCK_ENTITY_TICKER.apply(tickWrapper.ticker));
++            tickWrapper.slept =  tickWrapper.ticker; // Luminol - Fix region threading with lithium
++            tickWrapper.rebind(SleepingBlockEntity.SLEEPING_BLOCK_ENTITY_TICKER);
 +
 +            // Set the last tick time to max value, so other hoppers transferring into this hopper will set it to 7gt
 +            // cooldown. Then when waking up, we make sure to not tick this hopper in the same gametick.
@@ -2638,6 +2682,22 @@ index ebea67223ce1d350087c73dff0cc3fe6d7b47ca0..5203e85b761122b01569221f22db55f7
 +    }
 +    // Leaves end - Lithium Sleeping Block Entity
  }
+diff --git a/net/minecraft/world/level/block/entity/TickingBlockEntity.java b/net/minecraft/world/level/block/entity/TickingBlockEntity.java
+index c8facee29ee08e0975528083f89b64f0b593957f..37baad367daf6f4b2355e86c0c24a149cc1c665c 100644
+--- a/net/minecraft/world/level/block/entity/TickingBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/TickingBlockEntity.java
+@@ -12,4 +12,11 @@ public interface TickingBlockEntity {
+     String getType();
+ 
+     BlockEntity getTileEntity(); // Folia - region threading
++
++    // Luminol start - Fix region threading with lithium
++    @org.jetbrains.annotations.Nullable
++    default TickingBlockEntity getLithiumSleepingBaked() {
++        return null;
++    }
++    // Luminol end
+ }
 diff --git a/net/minecraft/world/level/block/state/BlockBehaviour.java b/net/minecraft/world/level/block/state/BlockBehaviour.java
 index 834e27ef2f7b342b074ff9e1e390e02f3ca1c399..e9749b66239d7562ecf22002bfbaa95df197050f 100644
 --- a/net/minecraft/world/level/block/state/BlockBehaviour.java
@@ -2660,7 +2720,7 @@ index 834e27ef2f7b342b074ff9e1e390e02f3ca1c399..e9749b66239d7562ecf22002bfbaa95d
      }
  
 diff --git a/net/minecraft/world/level/chunk/LevelChunk.java b/net/minecraft/world/level/chunk/LevelChunk.java
-index 7add73f2dd957374661affebfa2b0102d99363f8..0a99295397149933e7490b196a448158a40be52c 100644
+index 7add73f2dd957374661affebfa2b0102d99363f8..29788fedd54b8411c9c8872b4d83b037874fb5f0 100644
 --- a/net/minecraft/world/level/chunk/LevelChunk.java
 +++ b/net/minecraft/world/level/chunk/LevelChunk.java
 @@ -891,12 +891,14 @@ public class LevelChunk extends ChunkAccess implements ca.spottedleaf.moonrise.p
@@ -2678,7 +2738,7 @@ index 7add73f2dd957374661affebfa2b0102d99363f8..0a99295397149933e7490b196a448158
                              this.level.addBlockEntityTicker(rebindableTickingBlockEntityWrapper);
                              return rebindableTickingBlockEntityWrapper;
                          } else {
-@@ -1000,14 +1002,14 @@ public class LevelChunk extends ChunkAccess implements ca.spottedleaf.moonrise.p
+@@ -1000,14 +1002,15 @@ public class LevelChunk extends ChunkAccess implements ca.spottedleaf.moonrise.p
          void run(LevelChunk chunk);
      }
  
@@ -2686,6 +2746,7 @@ index 7add73f2dd957374661affebfa2b0102d99363f8..0a99295397149933e7490b196a448158
 -        private TickingBlockEntity ticker;
 +    public static class RebindableTickingBlockEntityWrapper implements TickingBlockEntity { // Leaves - default -> public
 +        public TickingBlockEntity ticker; // Leaves - private -> public
++        @Nullable public TickingBlockEntity slept; // Luminol - fix region threading with lithium
  
          RebindableTickingBlockEntityWrapper(TickingBlockEntity ticker) {
              this.ticker = ticker;
@@ -2696,3 +2757,17 @@ index 7add73f2dd957374661affebfa2b0102d99363f8..0a99295397149933e7490b196a448158
              this.ticker = ticker;
          }
  
+@@ -1042,6 +1045,13 @@ public class LevelChunk extends ChunkAccess implements ca.spottedleaf.moonrise.p
+         public String toString() {
+             return this.ticker + " <wrapped>";
+         }
++
++        // Luminol start - Fix region threading with lithium
++        @Override
++        public @org.jetbrains.annotations.Nullable TickingBlockEntity getLithiumSleepingBaked() {
++            return this.slept;
++        }
++        // Luminol end
+     }
+ 
+     @FunctionalInterface
