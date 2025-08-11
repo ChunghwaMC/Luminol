@@ -22,27 +22,33 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.TickingBlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.function.Function;
 
 public interface SleepingBlockEntity {
-    TickingBlockEntity SLEEPING_BLOCK_ENTITY_TICKER = new TickingBlockEntity() {
+    Function<TickingBlockEntity, TickingBlockEntity> SLEEPING_BLOCK_ENTITY_TICKER = delegate -> new TickingBlockEntity() {
         public void tick() {
         }
 
         public boolean isRemoved() {
-            return false;
+            return delegate.isRemoved();
         }
 
+        @NotNull
         public BlockPos getPos() {
-            return null;
+            return delegate.getPos();
         }
 
+        @NotNull
         public String getType() {
             return "<lithium_sleeping>";
         }
 
+        @NotNull
         @Override
         public BlockEntity getTileEntity() {
-            return null;
+            return delegate.getTileEntity();
         }
     };
 
@@ -64,7 +70,7 @@ public interface SleepingBlockEntity {
             return false;
         }
         this.lithium$setSleepingTicker(tickWrapper.ticker);
-        tickWrapper.rebind(SleepingBlockEntity.SLEEPING_BLOCK_ENTITY_TICKER);
+        tickWrapper.rebind(SleepingBlockEntity.SLEEPING_BLOCK_ENTITY_TICKER.apply(tickWrapper.ticker));
         return true;
     }
 
