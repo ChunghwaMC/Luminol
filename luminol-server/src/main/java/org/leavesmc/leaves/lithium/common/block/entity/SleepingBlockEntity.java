@@ -24,20 +24,18 @@ import net.minecraft.world.level.block.entity.TickingBlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.function.Function;
-
 public interface SleepingBlockEntity {
-    Function<TickingBlockEntity, TickingBlockEntity> SLEEPING_BLOCK_ENTITY_TICKER = delegate -> new TickingBlockEntity() {
+    TickingBlockEntity SLEEPING_BLOCK_ENTITY_TICKER = new TickingBlockEntity() {
         public void tick() {
         }
 
         public boolean isRemoved() {
-            return delegate.isRemoved();
+            return false;
         }
 
         @NotNull
         public BlockPos getPos() {
-            return delegate.getPos();
+            return null;
         }
 
         @NotNull
@@ -48,7 +46,7 @@ public interface SleepingBlockEntity {
         @NotNull
         @Override
         public BlockEntity getTileEntity() {
-            return delegate.getTileEntity();
+            return null;
         }
     };
 
@@ -69,8 +67,9 @@ public interface SleepingBlockEntity {
         if (tickWrapper == null) {
             return false;
         }
+        tickWrapper.slept = tickWrapper.ticker; // Luminol - fix region threading with lithium
         this.lithium$setSleepingTicker(tickWrapper.ticker);
-        tickWrapper.rebind(SleepingBlockEntity.SLEEPING_BLOCK_ENTITY_TICKER.apply(tickWrapper.ticker));
+        tickWrapper.rebind(SleepingBlockEntity.SLEEPING_BLOCK_ENTITY_TICKER);
         return true;
     }
 
@@ -81,7 +80,8 @@ public interface SleepingBlockEntity {
             sleepingTicker = tickWrapper.ticker;
         }
         Level world = ((BlockEntity) this).getLevel();
-        tickWrapper.rebind(new SleepUntilTimeBlockEntityTickInvoker((BlockEntity) this, world.getGameTime() + 1, sleepingTicker));
+        tickWrapper.slept = tickWrapper.ticker; // Luminol - fix region threading with lithium
+        tickWrapper.rebind(new SleepUntilTimeBlockEntityTickInvoker((BlockEntity) this, world.getRedstoneGameTime() + 1, sleepingTicker));
         this.lithium$setSleepingTicker(null);
     }
 
@@ -99,6 +99,7 @@ public interface SleepingBlockEntity {
         if (tickWrapper == null) {
             return;
         }
+        tickWrapper.slept = null; // Luminol - fix region threading with lithium
         tickWrapper.rebind(delegate);
     }
 
