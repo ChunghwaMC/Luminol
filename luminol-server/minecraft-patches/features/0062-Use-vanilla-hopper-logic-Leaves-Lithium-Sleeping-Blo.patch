@@ -8,10 +8,49 @@ This patch is based on Leaves(https://github.com/LeavesMC/Leaves)
 Original license: GPL3(https://github.com/LeavesMC/Leaves/blob/master/licenses/GPL.md)
 
 diff --git a/io/papermc/paper/threadedregions/RegionizedWorldData.java b/io/papermc/paper/threadedregions/RegionizedWorldData.java
-index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..f43791e11e54be11b844118ff7c58616e45700f4 100644
+index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..e6245a23c5e1dd8c8587e615ae0d00588e63e228 100644
 --- a/io/papermc/paper/threadedregions/RegionizedWorldData.java
 +++ b/io/papermc/paper/threadedregions/RegionizedWorldData.java
-@@ -241,7 +241,18 @@ public final class RegionizedWorldData {
+@@ -49,6 +49,9 @@ import net.minecraft.world.level.redstone.CollectingNeighborUpdater;
+ import net.minecraft.world.level.redstone.NeighborUpdater;
+ import net.minecraft.world.ticks.LevelTicks;
+ import org.bukkit.craftbukkit.block.CraftBlockState;
++import org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionEntityMovementListener;
++import org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionEntityMovementTracker;
++import org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionInventoryEntityTracker;
+ import org.slf4j.Logger;
+ import javax.annotation.Nullable;
+ import java.util.ArrayDeque;
+@@ -73,6 +76,10 @@ public final class RegionizedWorldData {
+     public static final RegionizedData.RegioniserCallback<RegionizedWorldData> REGION_CALLBACK = new RegionizedData.RegioniserCallback<>() {
+         @Override
+         public void merge(final RegionizedWorldData from, final RegionizedWorldData into, final long fromTickOffset) {
++            // lithium listeners
++            for (final Map.Entry<Long, ChunkSectionInventoryEntityTracker> entry : from.containerEntityMovementTrackerMap.entrySet()) {
++                into.containerEntityMovementTrackerMap.put(entry.getKey(), entry.getValue());
++            }
+             // connections
+             for (final Connection conn : from.connections) {
+                 into.connections.add(conn);
+@@ -165,6 +172,17 @@ public final class RegionizedWorldData {
+         public void split(final RegionizedWorldData from, final int chunkToRegionShift,
+                           final Long2ReferenceOpenHashMap<RegionizedWorldData> regionToData,
+                           final ReferenceOpenHashSet<RegionizedWorldData> dataSet) {
++            // lithium entity movement listeners
++            for (final Map.Entry<Long, ChunkSectionInventoryEntityTracker> entry : from.containerEntityMovementTrackerMap.entrySet()) {
++                final long key = entry.getKey();
++                final ChunkSectionInventoryEntityTracker movementTracker = entry.getValue();
++
++                final net.minecraft.core.SectionPos sectionPos = net.minecraft.core.SectionPos.of(key);
++                final ChunkPos pos = sectionPos.chunk();
++
++                regionToData.get(CoordinateUtils.getChunkKey(pos.x >> chunkToRegionShift, pos.z >> chunkToRegionShift))
++                        .containerEntityMovementTrackerMap.put(key, movementTracker);
++            }
+             // connections
+             for (final Connection conn : from.connections) {
+                 final ServerPlayer player = conn.getPlayer();
+@@ -241,7 +259,18 @@ public final class RegionizedWorldData {
  
              // tile entity ticking
              for (final TickingBlockEntity tileEntity : from.pendingBlockEntityTickers) {
@@ -31,7 +70,7 @@ index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..f43791e11e54be11b844118ff7c58616
                  final int chunkX = pos.getX() >> 4;
                  final int chunkZ = pos.getZ() >> 4;
  
-@@ -252,7 +263,18 @@ public final class RegionizedWorldData {
+@@ -252,7 +281,18 @@ public final class RegionizedWorldData {
                    //       marked as removed. So if there is no section, it's probably removed!
              }
              for (final TickingBlockEntity tileEntity : from.blockEntityTickers) {
@@ -51,6 +90,15 @@ index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..f43791e11e54be11b844118ff7c58616
                  final int chunkX = pos.getX() >> 4;
                  final int chunkZ = pos.getZ() >> 4;
  
+@@ -447,6 +487,8 @@ public final class RegionizedWorldData {
+     // Redstone
+     public final alternate.current.wire.WireHandler wireHandler;
+     public final io.papermc.paper.redstone.RedstoneWireTurbo turbo;
++    // Lithium
++    public final Map<Long, ChunkSectionInventoryEntityTracker> containerEntityMovementTrackerMap = new java.util.HashMap<>();
+ 
+     public RegionizedWorldData(final ServerLevel world) {
+         this.world = world;
 diff --git a/net/minecraft/core/NonNullList.java b/net/minecraft/core/NonNullList.java
 index 7e31c5c8659d24948fd45a2d6ee7bdeca6027d27..387325b971b7cec6aeb677bf6c49b8bf21b3a344 100644
 --- a/net/minecraft/core/NonNullList.java
@@ -146,7 +194,7 @@ index b382665cc125b8b5c0938e5e55984e4bf91d37ff..2afaf6a3f18af7889f4f3b35cee9bbb5
  
      int getContainerSize();
 diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
-index c3702df38422c13df1c189463a0dfcc3ee44f072..232cd221673cdb2b80b6622063ea8b6a2c0a602e 100644
+index c3702df38422c13df1c189463a0dfcc3ee44f072..78cc84f78a4fbeffb61b276efd42cbc5a548a9f7 100644
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
 @@ -308,7 +308,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
@@ -158,32 +206,36 @@ index c3702df38422c13df1c189463a0dfcc3ee44f072..232cd221673cdb2b80b6622063ea8b6a
      private final VecDeltaCodec packetPositionCodec = new VecDeltaCodec();
      public boolean hasImpulse;
      @Nullable
-@@ -6074,6 +6074,25 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+@@ -6074,7 +6074,29 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
              this.setBoundingBox(this.makeBoundingBox());
          }
          // Paper end - Block invalid positions and bounding box
-+        // Leaves start - Lithium Sleeping Block Entity
++        this.notifyTrackersIfNeed();
++    }
++    // Leaves start - Lithium Sleeping Block Entity
++    private void notifyTrackersIfNeed() {
 +        if (!me.earthme.luminol.config.modules.optimizations.LeavesSleepingBlockEntityConfig.enabled) return;
 +        if (this instanceof ItemEntity) {
 +            long sectionKey = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionKey(this);
 +            var tracker = org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionItemEntityMovementTracker.itemEntityMovementTrackerMap.computeIfAbsent(
-+                sectionKey,
-+                k -> new org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionItemEntityMovementTracker(sectionKey)
++                    sectionKey,
++                    k -> new org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionItemEntityMovementTracker(sectionKey)
 +            );
-+            tracker.notifyAllListeners(level.getGameTime());
++            tracker.notifyAllListeners(level.getRedstoneGameTime());
 +        }
 +        else if (this instanceof net.minecraft.world.entity.vehicle.ContainerEntity) {
 +            long sectionKey = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionKey(this);
-+            var tracker = org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionInventoryEntityTracker.containerEntityMovementTrackerMap.computeIfAbsent(
-+                sectionKey,
-+                k -> new org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionInventoryEntityTracker(sectionKey)
++            var tracker = this.level.getCurrentWorldData().containerEntityMovementTrackerMap.computeIfAbsent(
++                    sectionKey,
++                    k -> new org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionInventoryEntityTracker(sectionKey, this.level)
 +            );
-+            tracker.notifyAllListeners(level.getGameTime());
++            tracker.notifyAllListeners(level.getRedstoneGameTime());
 +        }
-+        // Leaves end - Lithium Sleeping Block Entity
      }
++    // Leaves end - Lithium Sleeping Block Entity
  
      public void checkDespawn() {
+     }
 diff --git a/net/minecraft/world/entity/item/ItemEntity.java b/net/minecraft/world/entity/item/ItemEntity.java
 index b745eb5d9c68547335247910ff2ae8d5fb36349c..fd4f1e63f980b6959fc80084651991f8f8bc6c34 100644
 --- a/net/minecraft/world/entity/item/ItemEntity.java
@@ -1446,7 +1498,7 @@ index 363d85c96bd3fb1a1945595df36e30bd6dd2fa4e..5f16810643b7567702b1101234571eaf
 +    // Leaves end - Lithium Sleeping Block Entity
  }
 diff --git a/net/minecraft/world/level/block/entity/HopperBlockEntity.java b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..b4ba997d100c4547c48413c165d8cbea52cd1b3c 100644
+index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..2f8128a11e316a6ee6b283f9a411096e582c03b7 100644
 --- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 @@ -27,8 +27,30 @@ import net.minecraft.world.level.block.state.BlockState;
@@ -1872,7 +1924,7 @@ index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..b4ba997d100c4547c48413c165d8cbea
      }
  
      public static void entityInside(Level level, BlockPos pos, BlockState state, Entity entity, HopperBlockEntity blockEntity) {
-@@ -887,4 +953,732 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -887,4 +953,737 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
      protected AbstractContainerMenu createMenu(int id, Inventory player) {
          return new HopperMenu(id, player, this);
      }
@@ -2602,6 +2654,11 @@ index 5de769e7bd56bb3355c3c711d46ce5e103ea4409..b4ba997d100c4547c48413c165d8cbea
 +            hopperBlockEntity.extractStackListModCount = fromStackList.getModCount();
 +        }
 +        return false;
++    }
++
++    @Override
++    public net.minecraft.world.level.ChunkPos getPos() {
++        return new net.minecraft.world.level.ChunkPos(this.worldPosition.getX() >> 4, this.worldPosition.getZ() >> 4);
 +    }
 +    // Leaves end - Lithium Sleeping Block Entity
  }
