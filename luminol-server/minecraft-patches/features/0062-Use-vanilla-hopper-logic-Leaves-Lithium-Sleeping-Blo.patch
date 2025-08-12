@@ -8,20 +8,18 @@ This patch is based on Leaves(https://github.com/LeavesMC/Leaves)
 Original license: GPL3(https://github.com/LeavesMC/Leaves/blob/master/licenses/GPL.md)
 
 diff --git a/io/papermc/paper/threadedregions/RegionizedWorldData.java b/io/papermc/paper/threadedregions/RegionizedWorldData.java
-index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..e6245a23c5e1dd8c8587e615ae0d00588e63e228 100644
+index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..36550816dd3363af99e4152c701f249af469695f 100644
 --- a/io/papermc/paper/threadedregions/RegionizedWorldData.java
 +++ b/io/papermc/paper/threadedregions/RegionizedWorldData.java
-@@ -49,6 +49,9 @@ import net.minecraft.world.level.redstone.CollectingNeighborUpdater;
+@@ -49,6 +49,7 @@ import net.minecraft.world.level.redstone.CollectingNeighborUpdater;
  import net.minecraft.world.level.redstone.NeighborUpdater;
  import net.minecraft.world.ticks.LevelTicks;
  import org.bukkit.craftbukkit.block.CraftBlockState;
-+import org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionEntityMovementListener;
-+import org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionEntityMovementTracker;
-+import org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionInventoryEntityTracker;
++import org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionInventoryEntityTracker; // Luminol - Lithium Sleeping Block Entity
  import org.slf4j.Logger;
  import javax.annotation.Nullable;
  import java.util.ArrayDeque;
-@@ -73,6 +76,10 @@ public final class RegionizedWorldData {
+@@ -73,6 +74,10 @@ public final class RegionizedWorldData {
      public static final RegionizedData.RegioniserCallback<RegionizedWorldData> REGION_CALLBACK = new RegionizedData.RegioniserCallback<>() {
          @Override
          public void merge(final RegionizedWorldData from, final RegionizedWorldData into, final long fromTickOffset) {
@@ -32,7 +30,7 @@ index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..e6245a23c5e1dd8c8587e615ae0d0058
              // connections
              for (final Connection conn : from.connections) {
                  into.connections.add(conn);
-@@ -165,6 +172,17 @@ public final class RegionizedWorldData {
+@@ -165,6 +170,17 @@ public final class RegionizedWorldData {
          public void split(final RegionizedWorldData from, final int chunkToRegionShift,
                            final Long2ReferenceOpenHashMap<RegionizedWorldData> regionToData,
                            final ReferenceOpenHashSet<RegionizedWorldData> dataSet) {
@@ -50,7 +48,7 @@ index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..e6245a23c5e1dd8c8587e615ae0d0058
              // connections
              for (final Connection conn : from.connections) {
                  final ServerPlayer player = conn.getPlayer();
-@@ -241,7 +259,18 @@ public final class RegionizedWorldData {
+@@ -241,7 +257,18 @@ public final class RegionizedWorldData {
  
              // tile entity ticking
              for (final TickingBlockEntity tileEntity : from.pendingBlockEntityTickers) {
@@ -70,7 +68,7 @@ index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..e6245a23c5e1dd8c8587e615ae0d0058
                  final int chunkX = pos.getX() >> 4;
                  final int chunkZ = pos.getZ() >> 4;
  
-@@ -252,7 +281,18 @@ public final class RegionizedWorldData {
+@@ -252,7 +279,18 @@ public final class RegionizedWorldData {
                    //       marked as removed. So if there is no section, it's probably removed!
              }
              for (final TickingBlockEntity tileEntity : from.blockEntityTickers) {
@@ -90,7 +88,7 @@ index 8c4d89c47fd176d584d3dbd0e3325f69b5e847c3..e6245a23c5e1dd8c8587e615ae0d0058
                  final int chunkX = pos.getX() >> 4;
                  final int chunkZ = pos.getZ() >> 4;
  
-@@ -447,6 +487,8 @@ public final class RegionizedWorldData {
+@@ -447,6 +485,8 @@ public final class RegionizedWorldData {
      // Redstone
      public final alternate.current.wire.WireHandler wireHandler;
      public final io.papermc.paper.redstone.RedstoneWireTurbo turbo;
