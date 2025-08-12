@@ -194,7 +194,7 @@ index b382665cc125b8b5c0938e5e55984e4bf91d37ff..2afaf6a3f18af7889f4f3b35cee9bbb5
  
      int getContainerSize();
 diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
-index c3702df38422c13df1c189463a0dfcc3ee44f072..78cc84f78a4fbeffb61b276efd42cbc5a548a9f7 100644
+index c3702df38422c13df1c189463a0dfcc3ee44f072..75f327fff68097c1c9f65767552f686421e1e397 100644
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
 @@ -308,7 +308,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
@@ -206,15 +206,31 @@ index c3702df38422c13df1c189463a0dfcc3ee44f072..78cc84f78a4fbeffb61b276efd42cbc5
      private final VecDeltaCodec packetPositionCodec = new VecDeltaCodec();
      public boolean hasImpulse;
      @Nullable
-@@ -6074,7 +6074,29 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+@@ -4306,11 +4306,13 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+     }
+ 
+     protected Entity transformForAsyncTeleport(ServerLevel destination, Vec3 pos, Float yaw, Float pitch, Vec3 velocity) {
++        final boolean flag = this.level != destination; // Luminol - different world
+         this.removeAfterChangingDimensions(); // remove before so that any CBEntity#getHandle call affects this entity before copying
+ 
+         Entity copy = this.getType().create(destination, EntitySpawnReason.DIMENSION_TRAVEL);
+         copy.restoreFrom(this);
+         copy.transform(pos, yaw, pitch, velocity);
++        if (flag) copy.notifyTrackersIfNeed(); // Luminol - redo notify trackers
+         // vanilla code used to call remove _after_ copying, and some stuff is required to be after copy - so add hook here
+         // for example, clearing of inventory after switching dimensions
+         this.postRemoveAfterChangingDimensions();
+@@ -6074,7 +6076,33 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
              this.setBoundingBox(this.makeBoundingBox());
          }
          // Paper end - Block invalid positions and bounding box
 +        this.notifyTrackersIfNeed();
 +    }
 +    // Leaves start - Lithium Sleeping Block Entity
-+    private void notifyTrackersIfNeed() {
++    public void notifyTrackersIfNeed() {
 +        if (!me.earthme.luminol.config.modules.optimizations.LeavesSleepingBlockEntityConfig.enabled) return;
++        if (io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData() != null
++                && io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData().world != this.level) return; // Luminol: if this is in teleport to another world, do not notify trackers now, we will reproduce later
 +        if (this instanceof ItemEntity) {
 +            long sectionKey = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionKey(this);
 +            var tracker = org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionItemEntityMovementTracker.itemEntityMovementTrackerMap.computeIfAbsent(
@@ -225,7 +241,9 @@ index c3702df38422c13df1c189463a0dfcc3ee44f072..78cc84f78a4fbeffb61b276efd42cbc5
 +        }
 +        else if (this instanceof net.minecraft.world.entity.vehicle.ContainerEntity) {
 +            long sectionKey = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionKey(this);
-+            var tracker = this.level.getCurrentWorldData().containerEntityMovementTrackerMap.computeIfAbsent(
++            final io.papermc.paper.threadedregions.RegionizedWorldData worldData = this.level.getCurrentWorldData();
++            if (worldData == null) return; // Luminol: in entity initialization, worldData is null, skip it
++            var tracker = worldData.containerEntityMovementTrackerMap.computeIfAbsent(
 +                    sectionKey,
 +                    k -> new org.leavesmc.leaves.lithium.common.tracking.entity.ChunkSectionInventoryEntityTracker(sectionKey, this.level)
 +            );
