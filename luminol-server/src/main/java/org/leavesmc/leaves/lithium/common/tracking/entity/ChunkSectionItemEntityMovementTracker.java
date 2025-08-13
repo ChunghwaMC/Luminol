@@ -38,8 +38,8 @@ public class ChunkSectionItemEntityMovementTracker extends ChunkSectionEntityMov
         WorldSectionBox worldSectionBox = WorldSectionBox.entityAccessBox(world, interactionArea);
 
         if (worldSectionBox.chunkX1() == worldSectionBox.chunkX2() &&
-            worldSectionBox.chunkY1() == worldSectionBox.chunkY2() &&
-            worldSectionBox.chunkZ1() == worldSectionBox.chunkZ2()) {
+                worldSectionBox.chunkY1() == worldSectionBox.chunkY2() &&
+                worldSectionBox.chunkZ1() == worldSectionBox.chunkZ2()) {
             return Collections.singletonList(registerAt(CoordinateUtils.getChunkSectionKey(worldSectionBox.chunkX1(), worldSectionBox.chunkY1(), worldSectionBox.chunkZ1())));
         }
 
@@ -58,8 +58,8 @@ public class ChunkSectionItemEntityMovementTracker extends ChunkSectionEntityMov
 
     private static @NotNull ChunkSectionItemEntityMovementTracker registerAt(long key) {
         ChunkSectionItemEntityMovementTracker tracker = itemEntityMovementTrackerMap.computeIfAbsent(
-            key,
-            k -> new ChunkSectionItemEntityMovementTracker(key)
+                key,
+                k -> new ChunkSectionItemEntityMovementTracker(key)
         );
         tracker.register();
         return tracker;

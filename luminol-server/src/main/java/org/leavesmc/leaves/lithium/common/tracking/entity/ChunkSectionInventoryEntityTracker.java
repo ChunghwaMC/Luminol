@@ -12,7 +12,6 @@ import org.leavesmc.leaves.lithium.common.util.tuples.WorldSectionBox;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 public class ChunkSectionInventoryEntityTracker extends ChunkSectionEntityMovementTracker {
     private final Level level;
@@ -39,8 +38,8 @@ public class ChunkSectionInventoryEntityTracker extends ChunkSectionEntityMoveme
         WorldSectionBox worldSectionBox = WorldSectionBox.entityAccessBox(world, interactionArea);
 
         if (worldSectionBox.chunkX1() == worldSectionBox.chunkX2() &&
-            worldSectionBox.chunkY1() == worldSectionBox.chunkY2() &&
-            worldSectionBox.chunkZ1() == worldSectionBox.chunkZ2()) {
+                worldSectionBox.chunkY1() == worldSectionBox.chunkY2() &&
+                worldSectionBox.chunkZ1() == worldSectionBox.chunkZ2()) {
             return Collections.singletonList(registerAt(world, CoordinateUtils.getChunkSectionKey(worldSectionBox.chunkX1(), worldSectionBox.chunkY1(), worldSectionBox.chunkZ1())));
         }
 
@@ -59,8 +58,8 @@ public class ChunkSectionInventoryEntityTracker extends ChunkSectionEntityMoveme
 
     private static @NotNull ChunkSectionInventoryEntityTracker registerAt(Level level, long key) {
         ChunkSectionInventoryEntityTracker tracker = level.getCurrentWorldData().containerEntityMovementTrackerMap.computeIfAbsent(
-            key,
-            k -> new ChunkSectionInventoryEntityTracker(key, level)
+                key,
+                k -> new ChunkSectionInventoryEntityTracker(key, level)
         );
         tracker.register();
         return tracker;
