@@ -32,8 +32,6 @@ public class ActorSchedulerThreadPool {
 
     private final ThreadFactory threadFactory;
     private final CopyOnWriteArrayList<SchedulerWorkerCarrier> workers = new CopyOnWriteArrayList<>();
-    // used for task dispatch
-    private final MultiThreadedQueue<SchedulerWorkerCarrier> idleWorkers = new MultiThreadedQueue<>();
     // used for task stats notification
     private final ConcurrentHashMap<SchedulableTick, WorkerTaskNode> taskBandings = new ConcurrentHashMap<>();
     private final Thread.UncaughtExceptionHandler exceptionHandler;
@@ -176,17 +174,11 @@ public class ActorSchedulerThreadPool {
     }
 
     private @Nullable ActorSchedulerThreadPool.SchedulerWorkerCarrier selectWorker() {
-        // try getting an idle worker immediately
-        final SchedulerWorkerCarrier idleFirst = this.idleWorkers.poll();
-        if (idleFirst != null) {
-            return idleFirst;
-        }
-
         // Check for workers with the lowest load (fewest tasks)
         SchedulerWorkerCarrier bestWorker = null;
         int minTaskCount = Integer.MAX_VALUE;
         
-        for (SchedulerWorkerCarrier w : workers) {
+        for (SchedulerWorkerCarrier w : this.workers) {
             if (w.status.get() != SchedulerWorkerCarrier.STATUS_SHUTDOWN) {
                 int taskCount = w.inComingTaskMessages.size();
                 if (taskCount < minTaskCount) {
@@ -201,9 +193,9 @@ public class ActorSchedulerThreadPool {
         }
 
         // idle first and load low first failed, chose one randomly
-        int r = ThreadLocalRandom.current().nextInt(workers.size());
-        for (int i = 0; i < workers.size(); i++) {
-            SchedulerWorkerCarrier w = workers.get((r + i) % workers.size());
+        int r = ThreadLocalRandom.current().nextInt(this.workers.size());
+        for (int i = 0; i < this.workers.size(); i++) {
+            SchedulerWorkerCarrier w = this.workers.get((r + i) % this.workers.size());
             if (w.status.get() != SchedulerWorkerCarrier.STATUS_SHUTDOWN) {
                 return w;
             }
@@ -715,9 +707,6 @@ public class ActorSchedulerThreadPool {
                 if (incomingMessage != null) {
                     this.status.set(STATUS_BUSY);
 
-                    // pull out curr thread from idle threads if possible
-                    ActorSchedulerThreadPool.this.idleWorkers.remove(this);
-
                     Pair<Boolean, Boolean> result = this.processMessage(incomingMessage);
 
                     final boolean wannaReinsert = result.left();
@@ -771,15 +760,9 @@ public class ActorSchedulerThreadPool {
 
                         // we need to prevent the task got stolen twice
                         this.status.set(STATUS_TASK_GOT_FROM_STEAL);
-
-                        // pull out curr thread from idle threads if possible
-                        ActorSchedulerThreadPool.this.idleWorkers.remove(this);
                         continue;
                     }
                 }
-
-                // push to idle threads
-                ActorSchedulerThreadPool.this.idleWorkers.offer(this);
 
                 this.status.set(STATUS_IDLE);
 
